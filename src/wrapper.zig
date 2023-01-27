@@ -101,6 +101,21 @@ pub fn main() anyerror!void {
     // Execute plugin code
     plugin.burrito_plugin_entry(install_dir, RELEASE_METADATA_JSON);
 
+    // Check for maintenance commands
+    if (args_trimmed.len > 0 and std.mem.eql(u8, args_trimmed[0], "maintenance")) {
+        logger.info("Entering {s} maintenance mode...", .{build_options.RELEASE_NAME});
+        logger.info("Build metadata: {s}", .{RELEASE_METADATA_JSON});
+        try maint.do_maint(args_trimmed[1..], install_dir);
+        return;
+    }
+
+    // Check for version flag
+    if (args_trimmed.len > 0 and std.mem.eql(u8, args_trimmed[0], "--version")) {
+        var out = std.io.getStdOut().writer();
+        try out.print("{s}\n", .{meta.app_version});
+        return;
+    }
+
     // If we need an install, install the payload onto the target machine
     if (needs_install or wants_clean_install) {
         // If running a clean install (probably a debug build)
@@ -114,14 +129,6 @@ pub fn main() anyerror!void {
         try do_payload_install(install_dir, metadata_path);
     } else {
         log.debug("Skipping archive unpacking, this machine already has the app installed!", .{});
-    }
-
-    // Check for maintenance commands
-    if (args_trimmed.len > 0 and std.mem.eql(u8, args_trimmed[0], "maintenance")) {
-        logger.info("Entering {s} maintenance mode...", .{build_options.RELEASE_NAME});
-        logger.info("Build metadata: {s}", .{RELEASE_METADATA_JSON});
-        try maint.do_maint(args_trimmed[1..], install_dir);
-        return;
     }
 
     // Clean up older versions
