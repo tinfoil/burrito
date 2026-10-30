@@ -5,7 +5,7 @@ defmodule ExampleCliApp.MixProject do
     [
       app: :example_cli_app,
       releases: releases(),
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -21,7 +21,7 @@ defmodule ExampleCliApp.MixProject do
             macos: [os: :darwin, cpu: :x86_64],
             macos_m1: [os: :darwin, cpu: :aarch64],
             linux: [os: :linux, cpu: :x86_64],
-            linux_musl: [os: :linux, cpu: :x86_64, libc: :musl],
+            linux_aarch64: [os: :linux, cpu: :aarch64],
             windows: [os: :windows, cpu: :x86_64]
           ],
           extra_steps: [
@@ -45,9 +45,8 @@ defmodule ExampleCliApp.MixProject do
 
   defp deps do
     [
-      {:burrito, path: "../"},
-      {:exqlite, "~> 0.11.7"}
-      # {:ex_termbox, "~> 1.0"},
+      {:exqlite, "~> 0.11.7"},
+      {:burrito, path: "../../"}
     ]
   end
 end

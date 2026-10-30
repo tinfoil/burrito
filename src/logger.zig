@@ -1,35 +1,44 @@
 const std = @import("std");
-
-var log = std.log;
-var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-var allocator = arena.allocator();
+const Io = std.Io;
 
 pub fn query(comptime message: []const u8, args: anytype) void {
-    var stdout = std.io.getStdOut().writer();
-    var out_string = std.fmt.allocPrint(allocator, message, args) catch { return; };
-    stdout.print("[?] {s}", .{out_string}) catch {};
+    printToStdout("[?] " ++ message, args);
+}
+
+pub fn log_stderr(comptime message: []const u8, args: anytype) void {
+    printToStderr("[l] " ++ message ++ "\n", args);
 }
 
 pub fn info(comptime message: []const u8, args: anytype) void {
-    var stdout = std.io.getStdOut().writer();
-    var out_string = std.fmt.allocPrint(allocator, message, args) catch { return; };
-    stdout.print("[i] {s}\n", .{out_string}) catch {};
+    printToStdout("[i] " ++ message ++ "\n", args);
 }
 
 pub fn warn(comptime message: []const u8, args: anytype) void {
-    var stderr = std.io.getStdErr().writer();
-    var out_string = std.fmt.allocPrint(allocator, message, args) catch { return; };
-    stderr.print("[w] {s}\n", .{out_string}) catch {};
+    printToStderr("[w] " ++ message ++ "\n", args);
 }
 
 pub fn err(comptime message: []const u8, args: anytype) void {
-    var stderr = std.io.getStdErr().writer();
-    var out_string = std.fmt.allocPrint(allocator, message, args) catch { return; };
-    stderr.print("[!] {s}\n", .{out_string}) catch {};
+    printToStderr("[!] " ++ message ++ "\n", args);
 }
 
 pub fn crit(comptime message: []const u8, args: anytype) void {
-    var stderr = std.io.getStdErr().writer();
-    var out_string = std.fmt.allocPrint(allocator, message, args) catch { return; };
-    stderr.print("[!!] {s}\n", .{out_string}) catch {};
+    printToStderr("[!!] " ++ message ++ "\n", args);
+}
+
+fn printToStdout(comptime message: []const u8, args: anytype) void {
+    var stdout_buf: [64]u8 = undefined;
+    var stdout_writer = Io.File.stdout().writer(std.Options.debug_io, &stdout_buf);
+    const stdout = &stdout_writer.interface;
+
+    stdout.print(message, args) catch {};
+    stdout.flush() catch {};
+}
+
+fn printToStderr(comptime message: []const u8, args: anytype) void {
+    var stderr_buf: [64]u8 = undefined;
+    var stderr_writer = Io.File.stderr().writer(std.Options.debug_io, &stderr_buf);
+    const stderr = &stderr_writer.interface;
+
+    stderr.print(message, args) catch {};
+    stderr.flush() catch {};
 }

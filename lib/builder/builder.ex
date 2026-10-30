@@ -42,7 +42,7 @@ defmodule Burrito.Builder do
   """
 
   @phases [
-    fetch: [Fetch.Init, Fetch.ResolveERTS],
+    fetch: [Fetch.Init, Fetch.FetchMusl, Fetch.ResolveERTS],
     patch: [Patch.CopyERTS, Patch.RecompileNIFs],
     build: [Build.PackAndBuild, Build.CopyRelease]
   ]
@@ -64,8 +64,6 @@ defmodule Burrito.Builder do
           "Target is being overridden with BURRITO_TARGET #{target_override_string}"
         )
 
-        old_targets = Target.get_old_targets()
-
         override_atom =
           try do
             String.to_existing_atom(target_override_string)
@@ -74,15 +72,10 @@ defmodule Burrito.Builder do
           end
 
         # If we have a named target defined that matches this atom use that
-        # otherwise if it's a legacy build target, translate it (this will be removed soon!)
         # otherwise :error, not a valid target
         cond do
           Keyword.has_key?(build_targets, override_atom) ->
             Keyword.take(build_targets, [override_atom])
-
-          override_atom in old_targets ->
-            resolved_override = Target.maybe_translate_old_target(override_atom)
-            Keyword.put([], override_atom, resolved_override)
 
           true ->
             raise_invalid_target(override_atom)
@@ -93,8 +86,8 @@ defmodule Burrito.Builder do
 
     # Build every target
     Enum.each(build_targets, fn {name, t} ->
-      target = Target.init_target(name, t)
-      target = %Target{target | debug?: debug?}
+      %Target{} = target = Target.init_target(name, t)
+      target = %{target | debug?: debug?}
 
       self_path =
         __ENV__.file
@@ -109,6 +102,7 @@ defmodule Burrito.Builder do
         mix_release: release,
         work_dir: "",
         self_dir: self_path,
+        extra_build_env: [],
         halted: false
       }
 

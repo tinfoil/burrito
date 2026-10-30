@@ -1,4 +1,4 @@
-### macOS ###
+## macOS ###
 # General
 .DS_Store
 .AppleDouble
@@ -32,6 +32,7 @@ Temporary Items
 
 zig-cache/
 zig-out/
+**.zig-cache/**
 build-*/
 docgen_tmp/
 
@@ -51,3 +52,5 @@ erl_crash.dump
 *.beam
 /config/*.secret.exs
 .elixir_ls/
+**/burrito_out/**
+

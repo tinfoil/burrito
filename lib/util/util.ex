@@ -8,20 +8,6 @@ defmodule Burrito.Util do
     end
   end
 
-  @spec get_libc_type :: :glibc | :musl | nil
-  def get_libc_type do
-    if get_current_os() != :linux do
-      nil
-    else
-      {result, _} = System.cmd("ldd", ["--version"])
-
-      cond do
-        String.contains?(result, "musl") -> :musl
-        true -> :glibc
-      end
-    end
-  end
-
   def get_current_cpu do
     arch_string =
       :erlang.system_info(:system_architecture)
@@ -32,7 +18,7 @@ defmodule Burrito.Util do
 
     case arch_string do
       "x86_64" -> :x86_64
-      "arm64" -> :arm64
+      "arm64" -> :aarch64
       "aarch64" -> :aarch64
       _ -> :unknown
     end
@@ -40,7 +26,7 @@ defmodule Burrito.Util do
 
   @spec get_otp_version :: String.t()
   def get_otp_version() do
-    {:ok, opt_version} =
+    {:ok, otp_version} =
       :file.read_file(
         :filename.join([
           :code.root_dir(),
@@ -50,6 +36,35 @@ defmodule Burrito.Util do
         ])
       )
 
-    String.trim(opt_version)
+    String.trim(otp_version)
+  end
+
+  @doc """
+  Checks if the application is currently running as a standalone Burrito release, or via some other mechanism,
+  such as an `escript`.
+  """
+  @spec running_standalone?() :: boolean()
+  def running_standalone?() do
+    System.get_env("__BURRITO") != nil
+  end
+
+  @doc """
+  Gets the HTTP or HTTPS proxy from environment variables, if set.
+  1. Checks `HTTP_PROXY` and `http_proxy`
+  2. Checks `HTTPS_PROXY` and `https_proxy`
+  3. Returns `nil` if no proxy is set
+  """
+  @spec get_proxy :: URI.t() | nil
+  def get_proxy do
+    cond do
+      proxy = System.get_env("HTTP_PROXY") || System.get_env("http_proxy") ->
+        URI.parse(proxy)
+
+      proxy = System.get_env("HTTPS_PROXY") || System.get_env("https_proxy") ->
+        URI.parse(proxy)
+
+      true ->
+        nil
+    end
   end
 end

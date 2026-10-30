@@ -5,7 +5,7 @@ defmodule Burrito.Util.DefaultERTSResolver do
   alias Burrito.Util
   alias Burrito.Util.FileCache
   alias Burrito.Util.ERTSResolver
-  alias Burrito.Util.ERTSUrlFetcher
+  alias Burrito.Util.ERTSUniversalMachineFetcher
 
   @behaviour ERTSResolver
 
@@ -17,7 +17,7 @@ defmodule Burrito.Util.DefaultERTSResolver do
 
   def do_resolve(%Target{erts_source: {:precompiled, version: otp_version}} = target)
       when is_binary(otp_version) do
-    case ERTSUrlFetcher.fetch_version(
+    case ERTSUniversalMachineFetcher.fetch_version(
            target.os,
            target.qualifiers[:libc],
            target.cpu,
@@ -25,14 +25,6 @@ defmodule Burrito.Util.DefaultERTSResolver do
          ) do
       %URI{} = location ->
         %Target{target | erts_source: {:url, url: location}} |> do_resolve()
-
-      {:error, err} ->
-        Log.error(
-          :step,
-          "Failed to fetch a precompiled Erlang (version #{otp_version})!\n\t Reason: #{translate_resolve_error(err)}"
-        )
-
-        %Target{target | erts_source: {:unresolved, err}}
     end
   end
 
@@ -51,6 +43,10 @@ defmodule Burrito.Util.DefaultERTSResolver do
     %Target{target | erts_source: {:local_unpacked, path: unpacked_location}}
   end
 
+  def do_resolve(%Target{erts_source: {:local_unpacked, path: _location}} = target) do
+    target
+  end
+
   defp get_erts(tar_url) do
     cache_key = :crypto.hash(:sha, tar_url) |> Base.encode16()
 
@@ -62,25 +58,6 @@ defmodule Burrito.Util.DefaultERTSResolver do
       _ ->
         do_download(tar_url, cache_key)
     end
-  end
-
-  # Req can decompress the body into a list of {filename, filedata}
-  defp do_unpack(data, _target) when is_list(data) do
-    random_id = :crypto.strong_rand_bytes(8) |> Base.encode16()
-    extraction_path = System.tmp_dir!() |> Path.join(["unpacked_erts_#{random_id}"])
-    File.mkdir_p!(extraction_path)
-
-    Enum.each(data, fn {filename, filedata} ->
-      path = Path.join(extraction_path, filename)
-
-      path
-      |> Path.dirname()
-      |> File.mkdir_p!()
-
-      File.write!(path, filedata)
-    end)
-
-    extraction_path
   end
 
   defp do_unpack(data, %Target{} = target) when is_binary(data) do
@@ -96,8 +73,17 @@ defmodule Burrito.Util.DefaultERTSResolver do
     # we use 7z to unpack windows setup files, otherwise we use tar
     command =
       case target.os do
-        :windows -> ~c"7z x #{tar_dest_path} -o#{extraction_path}/otp-windows/"
-        _ -> ~c"tar xzf #{tar_dest_path} -C #{extraction_path}"
+        :windows ->
+          seven_z =
+            with nil <- System.find_executable("7zz"),
+                 nil <- System.find_executable("7z") do
+              raise "Couldn't find 7z/7zz"
+            end
+
+          ~c"#{seven_z} x #{tar_dest_path} -o#{extraction_path}/otp-windows/"
+
+        _ ->
+          ~c"tar xzf #{tar_dest_path} -C #{extraction_path}"
       end
 
     :os.cmd(command)
@@ -112,12 +98,23 @@ defmodule Burrito.Util.DefaultERTSResolver do
   defp do_download(url, cache_key) do
     {:ok, _} = Application.ensure_all_started(:req)
     Log.info(:step, "Downloading file: #{url}")
-    data = Req.get!(url).body
-    FileCache.put_if_not_exist(cache_key, data)
-    data
-  end
 
-  defp translate_resolve_error(:no_result),
-    do:
-      "No pre-compiled version matching this combination of platform, arch, and libc was found on our CI system."
+    resp =
+      case Burrito.Util.get_proxy() do
+        proxy = %{scheme: scheme, host: host, port: port} when scheme in ["http", "https"] ->
+          Log.info(:step, "Using PROXY: #{proxy}")
+          proxy = {String.to_atom(scheme), host, port, []}
+          Req.get!(url, raw: true, connect_options: [proxy: proxy])
+
+        _ ->
+          Req.get!(url, raw: true)
+      end
+
+    if resp.status != 200 do
+      raise "Failed to fetch #{url}! (Got #{resp.status}) Perhaps we haven't built a pre-compiled Erlang for this release yet? If this was a 404, please file an issue! Thanks!"
+    end
+
+    FileCache.put_if_not_exist(cache_key, resp.body)
+    resp.body
+  end
 end
